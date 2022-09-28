@@ -11,12 +11,6 @@ int main(int argc, char *argv[])
 	// 명령행 인수가 있으면 IP 주소로 사용
 	if (argc > 1) SERVERIP = argv[1];
 
-	/*u_short PortNum[2]{};
-
-	for (int i = 2; i < argc; ++i) {
-		PortNum[i - 2] = (u_short)argv[i];
-	}*/
-
 	// 윈속 초기화
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
@@ -27,15 +21,21 @@ int main(int argc, char *argv[])
 	if (sock == INVALID_SOCKET) err_quit("socket()");
 
 	// connect()
-	for (int i = atoi(argv[2]); i < atoi(argv[argc]); ++i) {
+	for (int i = atoi(argv[2]); i <= atoi(argv[3]); ++i) {
 		struct sockaddr_in serveraddr;
 		memset(&serveraddr, 0, sizeof(serveraddr));
 		serveraddr.sin_family = AF_INET;
 		inet_pton(AF_INET, SERVERIP, &serveraddr.sin_addr);
-		serveraddr.sin_port = htons(i);
+		serveraddr.sin_port = htons((u_short)i);
 		retval = connect(sock, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
 		
-		printf("Port %d의 상태: %s\n", serveraddr.sin_port, retval ? "LISTENING" : "Not LISTENING");
+		if (retval == 0) {
+			printf("Port %d의 상태: LISTENING\n", i);
+		}
+
+		else {
+			printf("Port %d의 상태: Not LISTENING\n", i);
+		}
 	}
 
 	//// 데이터 통신에 사용할 변수
