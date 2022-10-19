@@ -1,6 +1,5 @@
 #include "..\..\Common.h"
 
-char* SERVERIP = (char*)"127.0.0.1";
 #define SERVERPORT 9000
 #define BUFSIZE    1024
 
@@ -17,6 +16,8 @@ int main(int argc, char* argv[])
     SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == INVALID_SOCKET) err_quit("socket()");
 
+    char* SERVERIP = (char*)argv[1];
+
     // connect()
     struct sockaddr_in serveraddr;
     memset(&serveraddr, 0, sizeof(serveraddr));
@@ -27,14 +28,14 @@ int main(int argc, char* argv[])
     if (retval == SOCKET_ERROR) err_quit("connect()");
 
     // 데이터 통신에 사용할 변수
-    FILE* file = fopen(argv[1], "rb");
+    FILE* file = fopen(argv[2], "rb");
     if (file == NULL) {
         err_display("fopen()");
     }
 
     char file_name[BUFSIZE];
     memset(&file_name, 0, sizeof(file_name));
-    sprintf(file_name, argv[1]);
+    sprintf(file_name, argv[2]);
     retval = send(sock, file_name, sizeof(file_name), 0);
 
     fseek(file, 0, SEEK_END);
