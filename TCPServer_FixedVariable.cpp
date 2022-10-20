@@ -3,6 +3,90 @@
 #define SERVERPORT 9000
 #define BUFSIZE    1024
 
+CONSOLE_SCREEN_BUFFER_INFO NowCur;
+int count;
+
+void gotoxy(int x, int y)
+{
+    COORD pos = { x,y };
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
+}
+
+DWORD WINAPI ProcessClient(LPVOID arg)
+{
+    int retval;
+    SOCKET client_sock = (SOCKET)arg;
+    struct sockaddr_in clientaddr;
+    char addr[INET_ADDRSTRLEN];
+    int addrlen;
+    char buf[BUFSIZE + 1];
+
+    // 클라이언트 정보 얻기
+    addrlen = sizeof(clientaddr);
+    getpeername(client_sock, (struct sockaddr*)&clientaddr, &addrlen);
+    inet_ntop(AF_INET, &clientaddr.sin_addr, addr, sizeof(addr));
+    CONSOLE_SCREEN_BUFFER_INFO Cur = NowCur;
+    
+    while (1) {
+        char file_name[BUFSIZE];
+        memset(&file_name, 0, sizeof(file_name));
+        retval = recv(client_sock, file_name, sizeof(file_name), 0);
+        if (retval == SOCKET_ERROR) {
+            err_display("recv()");
+            break;
+        }
+
+        long long file_size = 0;
+        retval = recv(client_sock, (char*)&file_size, sizeof(file_size), 0);
+        if (retval == SOCKET_ERROR) {
+            err_display("recv()");
+            break;
+        }
+
+        FILE* file = fopen(file_name, "wb");
+        long long size = 0;
+        long long last = 0;
+
+        while (1) {
+            retval = recv(client_sock, buf, BUFSIZE, 0);
+
+            if (retval == SOCKET_ERROR) {
+                err_display("recv()");
+                break;
+            }
+
+            else if (size == file_size) {
+                break;
+            }
+
+            else {
+                fwrite(buf, 1, retval, file);
+
+                size += retval;
+
+                if (last != (int)((float)size / file_size * 100)) {
+                    gotoxy(Cur.dwCursorPosition.X, Cur.dwCursorPosition.Y);
+                    printf("전송 받을 파일명: %s %d%% 전송...", file_name, (int)((float)size / file_size * 100));
+                }
+
+                last = (int)((float)size / file_size * 100);
+            }
+        }
+
+        // 소켓 닫기
+        printf("\n파일 전송을 완료했습니다.\n");
+        fclose(file);
+        break;
+    }
+
+    // 소켓 닫기
+    closesocket(client_sock);
+    printf("[TCP 서버] 클라이언트 종료: IP 주소=%s, 포트 번호=%d\n\n\n",
+        addr, ntohs(clientaddr.sin_port));
+    count--;
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     int retval;
@@ -33,8 +117,7 @@ int main(int argc, char* argv[])
     SOCKET client_sock;
     struct sockaddr_in clientaddr;
     int addrlen;
-    //int len; // 고정 길이 데이터
-    char buf[BUFSIZE]; // 가변 길이 데이터
+    HANDLE hThread;
 
     while (1) {
         // accept()
@@ -45,90 +128,23 @@ int main(int argc, char* argv[])
             break;
         }
 
+        count++;
+
         // 접속한 클라이언트 정보 출력
         char addr[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &clientaddr.sin_addr, addr, sizeof(addr));
+        if (count != 1) {
+           printf("\n\n\n\n");
+        }
         printf("\n[TCP 서버] 클라이언트 접속: IP 주소=%s, 포트 번호=%d\n",
             addr, ntohs(clientaddr.sin_port));
+        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &NowCur);
 
-        char file_name[BUFSIZE];
-        memset(&file_name, 0, sizeof(file_name));
-        retval = recv(client_sock, file_name, sizeof(file_name), 0);
-        if (retval == SOCKET_ERROR) {
-            err_display("recv()");
-            break;
-        }
-
-        printf("전송 받을 파일명: %s\n", file_name);
-
-        long long file_size = 0;
-        retval = recv(client_sock, (char*)&file_size, sizeof(file_size), 0);
-        if (retval == SOCKET_ERROR) {
-            err_display("recv()");
-            break;
-        }
-
-        FILE* file = fopen(file_name, "wb");
-        long long size = 0;
-        long long last = 0;
-
-        while (1) {
-            retval = recv(client_sock, buf, BUFSIZE, 0);
-
-            if (retval == SOCKET_ERROR) {
-                err_display("recv()");
-                break;
-            }
-
-            else if (size == file_size) {
-                printf("\n파일 전송을 완료했습니다.\n");
-
-                fclose(file);
-                break;
-            }
-
-            else {
-                fwrite(buf, 1, retval, file);
-
-                size += retval;
-
-                if (last != (float)size / file_size * 100) {
-                    printf("\r%.1f%% 전송...", (float)size / file_size * 100);
-                }
-
-                last = (float)size / file_size * 100;
-            }
-        }
-
-        //// 클라이언트와 데이터 통신
-        //while (1) {
-        //   // 데이터 받기(고정 길이)
-        //   retval = recv(client_sock, (char *)&len, sizeof(int), MSG_WAITALL);
-        //   if (retval == SOCKET_ERROR) {
-        //      err_display("recv()");
-        //      break;
-        //   }
-        //   else if (retval == 0)
-        //      break;
-
-        //   // 데이터 받기(가변 길이)
-        //   retval = recv(client_sock, buf, len, MSG_WAITALL);
-        //   if (retval == SOCKET_ERROR) {
-        //      err_display("recv()");
-        //      break;
-        //   }
-        //   else if (retval == 0)
-        //      break;
-
-        //   // 받은 데이터 출력
-        //   buf[retval] = '\0';
-        //   printf("[TCP/%s:%d] %s\n", addr, ntohs(clientaddr.sin_port), buf);
-        //}
-
-        // 소켓 닫기
-        closesocket(client_sock);
-        printf("[TCP 서버] 클라이언트 종료: IP 주소=%s, 포트 번호=%d\n",
-            addr, ntohs(clientaddr.sin_port));
+        // 스레드 생성
+        hThread = CreateThread(NULL, 0, ProcessClient,
+            (LPVOID)client_sock, 0, NULL);
+        if (hThread == NULL) { closesocket(client_sock); }
+        else { CloseHandle(hThread); }
     }
 
     // 소켓 닫기
